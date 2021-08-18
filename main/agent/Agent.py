@@ -1,8 +1,8 @@
 from __future__ import division
 import numpy as np
-from components import EpisodicLearner
-from components import SemanticLearner
-from components import NavigationLearner
+from .components import EpisodicLearner
+from .components import SemanticLearner
+from .components import NavigationLearner
 from ..lib.utils import activatePolicy
 
 

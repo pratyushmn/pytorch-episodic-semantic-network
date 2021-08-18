@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from main.agent import Agent
 from main.environment import Environment
-from main.lib.utils import Visualizer
 import optparse
 
 parser = optparse.OptionParser()
