@@ -4,10 +4,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data
 
-
 class SemanticLearner(nn.Module):
-
     def __init__(self, vUnits: int, hUnits: int = 300, lr: float = 0.00001, k: int = 1) -> None:
+        """Initializes a semantic learner class (based on Restricted Boltzmann Machines).
+        """
         super(SemanticLearner, self).__init__()
 
         self.num_visible = vUnits
@@ -33,7 +33,6 @@ class SemanticLearner(nn.Module):
 
         return torch.sigmoid(F.linear(h, self.W.t(), self.v))
 
-
     def forward(self, state: np.ndarray) -> np.ndarray:
         """Return the generated state from the input state.
         """
@@ -46,8 +45,10 @@ class SemanticLearner(nn.Module):
             h = self.visible_to_hidden(v.bernoulli())
 
         return v.detach().numpy()
-    
+
     def gibbs_sampling(self, x: torch.Tensor) -> torch.Tensor:
+        """Returns output of RBM (ie. visible units after passing through RBM k times).
+        """
         h = self.visible_to_hidden(x)
 
         # Contrastive Divergence
@@ -61,7 +62,7 @@ class SemanticLearner(nn.Module):
         """Free energy function from Hwang et al. 2020
         """
 
-        v_term = torch.matmul(v, self.v.t()) # matrix multiplication of input v and bias for visible layer
+        v_term = torch.matmul(v, self.v.t()) # matrix multiplication of input v and bias for visible layer.
         sum_term = torch.sum(F.softplus(F.linear(v, self.W, self.h)), dim=1)
         return torch.mean(-v_term - sum_term) 
     

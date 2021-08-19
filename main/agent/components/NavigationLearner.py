@@ -1,55 +1,90 @@
 from __future__ import division
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
 import numpy as np
 from ...lib.utils import sigmoid
 from ...lib.utils import convertToProbability
 
+class AddOne(nn.Module):
+    def __init__(self) -> None:
+        """Initializes a nn module which adds 1 to all elements of input tensor. Not sure why this is needed, but this operation was done in the original code everytime before the sigmoid function was applied. 
+        """
+        super(AddOne, self).__init__()
 
-class NavigationLearner():
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Adds 1 to all elements in input tensor.
+        """
+        return x + 1
 
-  def __init__(self, units, lr = 0.05):
-    self.W0 = np.random.normal(0, 0.1, (units + 8, 100))
-    self.W1 = np.random.normal(0, 0.1, (100, units))
-    self.actor = np.zeros(8)
-    self.action = 0
-    self.ca1 = np.zeros(units)
-    self.lr = lr
+class NavigationLearner(nn.Module):
+    def __init__(self, units: int, lr: int = 0.05) -> None:
+        """Initializes a navigation learner class that predicts the next state of the environment given a combination of episodic + semantic memory outputs of the current state of the environment, for all possible actions.
+        """
+        super(NavigationLearner, self).__init__()
 
+        def init_weights(m):
+            if isinstance(m, nn.Linear):
+                torch.nn.init.normal_(m.weight, mean=0.0, std=0.1)
+                # torch.nn.init.normal_(m.bias, mean=0.0, std=0.1)
 
-  def forward(self):
-    self.actor.fill(0)
-    self.actor[self.action] = 1
-    self.h = sigmoid(np.dot(np.append(self.ca1, self.actor), self.W0) + 1)
-    return sigmoid(np.dot(self.h, self.W1) + 1)
+        self.evaluator = nn.Sequential(
+            nn.Linear(units + 8, 100),
+            AddOne(),
+            nn.Sigmoid(),
+            nn.Linear(100, units),
+            AddOne(),
+            nn.Sigmoid()
+        )
 
-  # Choosing always comes before learning, so self.ca1 state should always
-  # be correct when calling forward during learning
-  def choose(self, memoryGoal, ca1, trialTime):
-    self.ca1 = ca1[:]
-    hamming = np.zeros(8)
-    for i in range(8):
-      self.action = i
-      output = self.forward()
-      hamming[i] = np.sum(np.absolute(memoryGoal - output))
-    prob = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
-    self.action = np.random.choice(np.arange(8), p=prob)
+        self.evaluator.apply(init_weights)
 
-  def learn(self, current, target, action):
-    self.ca1 = current
-    self.action = action
-    output = self.forward()
-    error = output - target
+        self.lr = lr
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        self.loss = nn.MSELoss()
 
-    # Create derivative for each layer, without bias units
-    dEdA2 = self.h * (1 - self.h)
-    dEdA3 = output * (1 - output)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Returns output of the neural network for a given input.
+        """
+        return self.evaluator(x)
 
-    # Calculate node deltas 
-    delta3 = dEdA3 * error
-    delta2 = np.sum(self.W1 * delta3, 1) * dEdA2
+    def choose(self, state: np.ndarray, memoryGoal: np.ndarray, trialTime: int) -> int:
+        """Returns an action to choose based on CA1 state and current memory of goal.
+        """
+        hamming = np.zeros(8)
+        actions = np.zeros(8)
 
-    # Update weights
-    self.W0 = self.W0 - self.lr * delta2 * np.append(self.ca1, 
-        self.actor).reshape(np.append(self.ca1, self.actor).size, 1)
-    self.W1 = self.W1 - self.lr * delta3 * self.h.reshape(self.h.size, 1)
+        for i in range(8):
+            actions.fill(0)
+            actions[i] = 1
+            
+            x = torch.Tensor(np.append(state, actions))
 
-    self.output = output
+            output = self.forward(x).detach().numpy()
+
+            hamming[i] = np.sum(np.absolute(memoryGoal - output))
+
+        # to prevent error in convertToProbability function when all values of the hamming array are equal, manually assign equal probabilities to all actions in that case
+        if np.all(hamming == hamming[0]): prob = np.ones(8)/8
+        else: prob = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
+
+        return np.random.choice(np.arange(8), p=prob)
+
+    def learn(self, state: np.ndarray, next_state: np.ndarray, action: int) -> None:
+        """Updates neural network weights
+        """
+        self.optimizer.zero_grad()
+
+        actions = np.zeros(8)
+        actions[action] = 1
+
+        x = torch.Tensor(np.append(state, actions))
+        next_state = torch.Tensor(next_state)
+
+        state_prediction = self.forward(x)
+
+        loss = self.loss(state_prediction, next_state)
+
+        loss.backward()
+        self.optimizer.step()
