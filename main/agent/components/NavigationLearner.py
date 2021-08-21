@@ -1,10 +1,6 @@
-from __future__ import division
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 import numpy as np
-from ...lib.utils import sigmoid
 from ...lib.utils import convertToProbability
 
 class AddOne(nn.Module):
@@ -19,7 +15,7 @@ class AddOne(nn.Module):
         return x + 1
 
 class NavigationLearner(nn.Module):
-    def __init__(self, units: int, lr: int = 0.05) -> None:
+    def __init__(self, units: int, lr: float = 0.05) -> None:
         """Initializes a navigation learner class that predicts the next state of the environment given a combination of episodic + semantic memory outputs of the current state of the environment, for all possible actions.
         """
         super(NavigationLearner, self).__init__()
@@ -27,8 +23,10 @@ class NavigationLearner(nn.Module):
         def init_weights(m):
             if isinstance(m, nn.Linear):
                 torch.nn.init.normal_(m.weight, mean=0.0, std=0.1)
-                # torch.nn.init.normal_(m.bias, mean=0.0, std=0.1)
+                torch.nn.init.constant_(m.bias, 0)
 
+        # In the original code, there's no bias in the linear layers. 
+        # I decided to keep a bias but initialize it to zero. However, bias can be removed from th elinear layers by also adding a bias=False parameter to the nn.Linear constructor
         self.evaluator = nn.Sequential(
             nn.Linear(units + 8, 100),
             AddOne(),
@@ -40,6 +38,9 @@ class NavigationLearner(nn.Module):
 
         self.evaluator.apply(init_weights)
 
+        # self.W0 = nn.Parameter(torch.Tensor(np.random.normal(0, 0.1, (units + 8, 100))))
+        # self.W1 = nn.Parameter(torch.Tensor(np.random.normal(0, 0.1, (100, units))))
+
         self.lr = lr
         self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
         self.loss = nn.MSELoss()
@@ -47,6 +48,8 @@ class NavigationLearner(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Returns output of the neural network for a given input.
         """
+        # x = torch.sigmoid(torch.matmul(x, self.W0) + 1)
+        # return torch.sigmoid(torch.matmul(x, self.W1) + 1)
         return self.evaluator(x)
 
     def choose(self, state: np.ndarray, memoryGoal: np.ndarray, trialTime: int) -> int:
@@ -65,14 +68,19 @@ class NavigationLearner(nn.Module):
 
             hamming[i] = np.sum(np.absolute(memoryGoal - output))
 
-        # to prevent error in convertToProbability function when all values of the hamming array are equal, manually assign equal probabilities to all actions in that case
-        if np.all(hamming == hamming[0]): prob = np.ones(8)/8
+        # To prevent error in convertToProbability function when all values of the hamming array are equal, manually assign equal probabilities to all actions in that case.
+        # For some reason, all equal hamming array only happens when you switch to using MSE Loss + Adam optimizer steps, instead of manually updating weights.
+        # I tried using matrix multiplication with Pytorch instead of Numpy, and hamming array was never all equal until I switched to using an optimizer instead of manual weight updates.
+        if np.all(hamming == hamming[0]): 
+            print("All hamming are the same at trialtime {}".format(trialTime))
+            prob = np.ones(8)/8
+
         else: prob = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
 
         return np.random.choice(np.arange(8), p=prob)
 
     def learn(self, state: np.ndarray, next_state: np.ndarray, action: int) -> None:
-        """Updates neural network weights
+        """Updates neural network weights.
         """
         self.optimizer.zero_grad()
 

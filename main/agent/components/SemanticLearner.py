@@ -24,13 +24,11 @@ class SemanticLearner(nn.Module):
     def visible_to_hidden(self, v: torch.Tensor) -> torch.Tensor:
         """Conditional sampling of a hidden variable given a visible variable.
         """
-
         return torch.sigmoid(F.linear(v, self.W, self.h)).bernoulli()
 
     def hidden_to_visible(self, h: torch.Tensor) -> torch.Tensor:
         """Conditional distribution of a visible variable given a hidden variable.
         """
-
         return torch.sigmoid(F.linear(h, self.W.t(), self.v))
 
     def forward(self, state: np.ndarray) -> np.ndarray:
@@ -61,8 +59,7 @@ class SemanticLearner(nn.Module):
     def free_energy(self, v: torch.Tensor) -> torch.FloatTensor:
         """Free energy function from Hwang et al. 2020
         """
-
-        v_term = torch.matmul(v, self.v.t()) # matrix multiplication of input v and bias for visible layer.
+        v_term = torch.matmul(v, self.v.t()) # matrix multiplication of input v and bias for visible layer
         sum_term = torch.sum(F.softplus(F.linear(v, self.W, self.h)), dim=1)
         return torch.mean(-v_term - sum_term) 
     

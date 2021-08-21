@@ -1,9 +1,12 @@
-from __future__ import division
 import numpy as np
+import torch
 from .components import EpisodicLearner
 from .components import SemanticLearner
 from .components import NavigationLearner
 from ..lib.utils import activatePolicy
+
+
+from torch.utils.tensorboard import SummaryWriter
 
 class StandardAgent():
     def __init__(self, episodicUnits = 980):
@@ -11,7 +14,8 @@ class StandardAgent():
         self.learners.append(EpisodicLearner.EpisodicLearner(episodicUnits))
         self.learners.append(SemanticLearner.SemanticLearner(episodicUnits))
         self.navigation = NavigationLearner.NavigationLearner(episodicUnits)
-
+        # writer = SummaryWriter()
+        # writer.add_graph(self.learners[0], torch.Tensor([1,1]), verbose=True)
         # Episodic, semantic, and overall
         self.goals = [np.zeros(episodicUnits), np.zeros(episodicUnits), 
                 np.zeros(episodicUnits)]
@@ -25,9 +29,11 @@ class StandardAgent():
 
     def act(self, state, trialTime):
         # Episodic goal
-        self.ca1Now = self.probeCa1(state)
-        self.learners[0].forward(state)
-        self.goals[0] = self.learners[0].memoryGoal()
+        self.ca1Now = self.probeCA1(state)
+        self.currState = state
+        self.goals[0] = self.learners[0].forward(state)
+        self.learners[0].predict_state_val(state)
+        # self.goals[0] = self.learners[0].memoryGoal()
         
         # Semantic goal
         self.goals[1] = self.learners[1].forward(self.ca1Now)
@@ -48,31 +54,30 @@ class StandardAgent():
         # We need to take a step in the environment
         # before we learn so that the navigation net has
         # access to the next state given the action taken
-        self.ca1Next = self.probeCa1(state)
+        self.ca1Next = self.probeCA1(state)
         if reward == 1:
             self.learners[0].temporalDifference(reward)
             self.learners[0].updateCriticW()
             self.learners[0].lr = 0.01
             for i in range(100):
-                self.learners[0].forward(state)
-                self.learners[0].backward()
+                self.learners[0].backward(state)
             for i in range(200):
                 randomState = [np.random.uniform(0, 1), np.random.uniform(0, 1)]
-                self.ca1Next = self.probeCa1(randomState)
+                self.ca1Next = self.probeCA1(randomState)
                 self.learners[1].backward(self.ca1Next)
         elif reward == 0:
             self.learners[0].lr = self.learners[0].TDdelta * 0.1
-            self.learners[0].backward()
             self.learners[0].temporalDifference(reward)
             self.learners[0].updateCriticW()
+            self.learners[0].backward(self.currState)
             self.navigation.learn(self.ca1Now, self.ca1Next, self.action)
 
         # Decay policy
         for i in range(delay):
             self.decayPolicy()
 
-    def probeCa1(self, state):
-        return self.learners[0].probeCa1(state)
+    def probeCA1(self, state):
+        return self.learners[0].probeCA1(torch.Tensor(state)).detach().numpy()
 
     def decayPolicy(self):
         self.policyN = activatePolicy(self.policyN, self.tau)

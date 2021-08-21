@@ -1,97 +1,142 @@
-from __future__ import division
 import numpy as np
-from ...lib.utils import sigmoid
+import torch
+import torch.nn as nn
 
+class SubtractOne(nn.Module):
+    def __init__(self) -> None:
+        """Initializes a nn module which subtracts 1 from all elements of input tensor. Not sure why this is needed, but this operation was done in the original code before the sigmoid function was applied for the autoencoder. 
+        """
+        super(SubtractOne, self).__init__()
 
-class EpisodicLearner():
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Subtracts 1 elementwise from all elements in input tensor.
+        """
+        return x - 1
 
-  def __init__(self, units, lr = 0.01):
-    self.ca3Units = units
-    self.ca1Units = units
+class AutoEncoder(nn.Module):
+    def __init__(self, units: int) -> None:
+        """Initializes a nn module "autoencoder" which puts the input through the same layer twice. 
+        """
+        super(AutoEncoder, self).__init__()
 
-    self.ca1Fields = [np.random.uniform(-0.4, 1.4, units), 
-                      np.random.uniform(-0.4, 1.4, units)]
+        self.CA3W = nn.Linear(units, units)
+        self.subtractOne = SubtractOne()
 
-    # Stored activity patterns
-    self.ca3A = [np.zeros(units), np.zeros(units), np.zeros(units)] 
-    self.ca1A = [np.zeros(units), np.zeros(units)]
-    self.critic = [0, 0]
-    self.TDdelta = 0
+        # initialize weights in the same way done in the original code (although original code didn't have any bias at all)
+        torch.nn.init.normal_(self.CA3W.weight, mean=0.0, std=0.1)
+        torch.nn.init.constant_(self.CA3W.bias, 0.0)
 
-    # Weights
-    self.xyca3W = np.random.normal(0, 0.1, (2, units))
-    self.ca3ca3W = np.random.normal(0, 0.1, (units, units))
-    self.ca3ca1W = np.random.normal(0, 0.1, (units, units))
-    self.ca1CriticW = np.zeros((units, 1))
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Returns output of the "autoencoder" for a given input. 1 is subtracted elementwise everytime before the sigmoid function is applied in the original code; not sure why.
+        """
+        step1 = torch.sigmoid(self.subtractOne(self.CA3W(x)))
+        step2 = torch.sigmoid(self.subtractOne(self.CA3W(step1)))
+        return step2
 
-    self.momentum = 0
-    self.lr = lr
+class EpisodicLearner(nn.Module):
+    def __init__(self, units: int, lr: float = 0.01, gamma: float = 0.95, place_field_breadth: float = 0.16) -> None:
+        """Initializes an episodic learner class.
+        """
+        super(EpisodicLearner, self).__init__()
 
+        self.CA3Units = units
+        self.CA1Units = units
 
-  def forward(self, state):
-    # CA3        
-    self.ca3A[0] = sigmoid(np.dot(state, self.xyca3W))
-    self.ca3A[1] = sigmoid(np.dot(self.ca3A[0], self.ca3ca3W) - 1)
-    self.ca3A[2] = sigmoid(np.dot(self.ca3A[1], self.ca3ca3W) - 1)
+        self.CA1Fields = [torch.empty(self.CA1Units).uniform_(-0.4, 1.4), torch.empty(self.CA1Units).uniform_(-0.4, 1.4)]
+
+        # Stored activity patterns
+        self.state_vals = [0, 0] # critic values for last state and current state
+        self.TDdelta = 0
+
+        # NN Layers
+        self.input_to_autoencoder = nn.Linear(2, self.CA3Units)
+        self.autoencoder = AutoEncoder(self.CA3Units)
+        self.autoencoder_to_linear = nn.Linear(self.CA3Units, self.CA1Units)
+        self.critic_layer = nn.Linear(self.CA1Units, 1)
+
+        # initialize weights in the same way done in the original code (although original code didn't have any bias at all)
+        torch.nn.init.normal_(self.input_to_autoencoder.weight, mean=0.0, std=0.1)
+        torch.nn.init.constant_(self.input_to_autoencoder.bias, 0.0)
+
+        torch.nn.init.normal_(self.autoencoder_to_linear.weight, mean=0.0, std=0.1)
+        torch.nn.init.constant_(self.autoencoder_to_linear.bias, 0.0)
+
+        torch.nn.init.constant_(self.critic_layer.weight, 0.0)
+        torch.nn.init.constant_(self.critic_layer.bias, 0.0)
+
+        self.lr = lr
+        self.gamma = gamma
+        self.place_field_breadth = place_field_breadth
+
+        self.loss = nn.MSELoss()
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+
+    def forward(self, state: np.ndarray) -> np.ndarray:
+        """Return CA1 output cued from CA3 for given state; also update critic-based state values using CA1 cued from spatial input
+        """
+        state = torch.Tensor(state)
+
+        # CA3   
+        x = torch.sigmoid(self.input_to_autoencoder(state))
+        CA3 = self.autoencoder(x)
+
+        # CA1 cued from the CA3
+        CA1_from_CA3 = torch.sigmoid(self.autoencoder_to_linear(CA3))
+
+        return CA1_from_CA3.detach().numpy()
+
+    def predict_state_val(self, state: np.ndarray) -> None:
+        """Compute the critic prediction of state value and save it.
+        """
+        # CA1 cued from space
+        CA1_from_spatial = self.probeCA1(state)
+
+        # Critic value for state based on CA1 cued from space
+        self.state_vals[0] = self.state_vals[1]
+        self.state_vals[1] = self.activateCritic(CA1_from_spatial)
+
+    def backward(self, state: np.ndarray) -> None:
+        """Train the weights of all neural network layers (except the critic) based on the input state.
+        """
+        state = torch.Tensor(state)
+        self.optimizer.zero_grad()
+
+        # CA3 auto-encoding
+        x = torch.sigmoid(self.input_to_autoencoder(state))
+        CA3 = self.autoencoder(x)
+        CA3_loss = self.loss(CA3, x)
         
-    # CA1 holds 2 states. The first is cued from the CA3. The second is
-    # cued from space
-    self.ca1A[0] = sigmoid(np.dot(self.ca3A[2], self.ca3ca1W))
-    self.ca1A[1] = self.probeCa1(state)
+        # CA1
+        CA1_from_CA3 = torch.sigmoid(self.autoencoder_to_linear(CA3))
+        CA1_from_spatial = self.probeCA1(state)
+        CA1_loss = self.loss(CA1_from_CA3, CA1_from_spatial)
 
-    self.critic[0] = self.critic[1]
-    self.critic[1] = self.activateCritic()
+        loss = CA3_loss + CA1_loss
+        loss.backward()
+        self.optimizer.step()
 
+    def probeCA1(self, state: torch.Tensor) -> torch.Tensor:
+        """Outputs the spatially cued CA1 based on input state.
+        """
+        return (torch.exp(-((state[0] - self.CA1Fields[0])**2  + (state[1] - self.CA1Fields[1])**2) / (2 * (self.place_field_breadth**2))))
 
-  def backward(self):
-    # CA3 auto-encoding
-    ca3error = self.ca3A[2] - self.ca3A[0]
-    
-    # Create derivative for each layer
-    dEdca3A3 = self.ca3A[2] * (1 - self.ca3A[2])
-    dEdca3A2 = self.ca3A[1] * (1 - self.ca3A[1])
-        
-    # Calculate node deltas 
-    delta3 = dEdca3A3 * ca3error
-    delta2 = np.sum(self.ca3ca3W * delta3, 1) * dEdca3A2
-    
-    # Update weights
-    dW0 = -self.lr  * delta2 * self.ca3A[0].reshape(self.ca3Units, 1)
-    dW1 = -self.lr  * delta3 * self.ca3A[1].reshape(self.ca3Units, 1)
-    dWsum = (dW0 + dW1)/2
+    def activateCritic(self, spatial_CA1: torch.Tensor) -> torch.Tensor:
+        """Outputs the critic's valuation of the input spatially cued CA1.
+        """
+        return self.critic_layer(spatial_CA1)
 
-    self.ca3ca3W = self.ca3ca3W + dWsum + self.momentum
-    self.momentum = 0.5 * dWsum
+    def temporalDifference(self, reward: int) -> None:
+        """Computes critic prediction error based on the reward and past predictions, using temporal difference learning strategies.
+        """
+        if reward != 1:
+            self.TDdelta = self.gamma * self.state_vals[1] - self.state_vals[0]
+        elif reward == 1:
+            self.TDdelta = reward - self.state_vals[0]
 
-    # CA1
-    ca1error = self.ca1A[0] - self.ca1A[1]
-    dEdca1A = self.ca1A[0] * (1 - self.ca1A[0])
-    delta = dEdca1A * ca1error
-
-    # Update weights
-    self.ca3ca1W += - self.lr * delta * self.ca3A[2].reshape(self.ca3Units, 1)
-
-
-  def probeCa1(self, state):
-    return (np.exp(-((state[0] - self.ca1Fields[0])**2 
-        + (state[1] - self.ca1Fields[1])**2) / (2 * (0.16**2))))
-
-
-  def memoryGoal(self):
-    return self.ca1A[0]
-
-
-  def activateCritic(self):
-    return np.dot(self.ca1A[1], self.ca1CriticW)
-
-
-  def temporalDifference(self, reward):
-    if reward != 1:
-      self.TDdelta = 0.95 * self.critic[1] - self.critic[0]
-    elif reward == 1:
-      self.TDdelta = reward - self.critic[0]
-
-
-  def updateCriticW(self):
-    return self.ca1CriticW + 0.01 * self.TDdelta * self.ca1A[1].reshape(self.ca1A[1].size, 1)
+    def updateCriticW(self) -> None:
+        """Updates weights for critic based on TD delta.
+        """
+        self.optimizer.zero_grad()
+        self.TDdelta.backward(retain_graph=True)
+        self.optimizer.step()
 
