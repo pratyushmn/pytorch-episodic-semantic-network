@@ -19,7 +19,7 @@ class SemanticLearner(nn.Module):
         self.h = nn.Parameter(torch.zeros(1, self.num_hidden))
         self.W = nn.Parameter(torch.Tensor(np.random.normal(0, 0.01, (self.num_hidden, self.num_visible))))
         
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
 
     def visible_to_hidden(self, v: torch.Tensor) -> torch.Tensor:
         """Conditional sampling of a hidden variable given a visible variable.

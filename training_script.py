@@ -28,7 +28,7 @@ def train(trialMax = 5000, delay = 4000, policy = 1):
             rewardsFound += 1
             print('\nFound reward: ', rewardsFound)
             print('Time to reward: ', env.trialTime)
-            agent.learn(state, reward, env.delay)
+            # agent.learn(state, reward, env.delay)
             agent.policy = 1
             env.reset()
             state = env.state

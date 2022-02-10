@@ -11,3 +11,9 @@ def convertToProbability(x, NewMin, NewMax):
     OldMax = np.amax(x)
     new_x = (((x - OldMin) * (NewMax - NewMin)) / (OldMax - OldMin)) + NewMin
     return new_x / np.sum(new_x)
+
+def convertToProbabilityNew(x, alpha, trialTime):
+    new_alpha = max(alpha - trialTime/4000, 0)
+    new_x = new_alpha*(x/np.sum(x)) + (1 - new_alpha)/8
+
+    return new_x, new_alpha

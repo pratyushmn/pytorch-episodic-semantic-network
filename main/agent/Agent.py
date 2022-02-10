@@ -5,17 +5,13 @@ from .components import SemanticLearner
 from .components import NavigationLearner
 from ..lib.utils import activatePolicy
 
-
-from torch.utils.tensorboard import SummaryWriter
-
 class StandardAgent():
     def __init__(self, episodicUnits = 980):
         self.learners = []
         self.learners.append(EpisodicLearner.EpisodicLearner(episodicUnits))
         self.learners.append(SemanticLearner.SemanticLearner(episodicUnits))
         self.navigation = NavigationLearner.NavigationLearner(episodicUnits)
-        # writer = SummaryWriter()
-        # writer.add_graph(self.learners[0], torch.Tensor([1,1]), verbose=True)
+
         # Episodic, semantic, and overall
         self.goals = [np.zeros(episodicUnits), np.zeros(episodicUnits), 
                 np.zeros(episodicUnits)]
@@ -33,7 +29,6 @@ class StandardAgent():
         self.currState = state
         self.goals[0] = self.learners[0].forward(state)
         self.learners[0].predict_state_val(state)
-        # self.goals[0] = self.learners[0].memoryGoal()
         
         # Semantic goal
         self.goals[1] = self.learners[1].forward(self.ca1Now)
@@ -44,7 +39,7 @@ class StandardAgent():
 
         # Choose an action based on goal and predictions from nav network
         self.action = self.navigation.choose(self.goals[2], self.ca1Now, trialTime)
-        
+
         # Decay policy
         self.decayPolicy()
 
@@ -66,8 +61,9 @@ class StandardAgent():
                 self.ca1Next = self.probeCA1(randomState)
                 self.learners[1].backward(self.ca1Next)
         elif reward == 0:
-            self.learners[0].lr = self.learners[0].TDdelta * 0.1
             self.learners[0].temporalDifference(reward)
+            self.learners[0].lr = self.learners[0].TDdelta.item() * 0.1
+            # self.learners[0].temporalDifference(reward)
             self.learners[0].updateCriticW()
             self.learners[0].backward(self.currState)
             self.navigation.learn(self.ca1Now, self.ca1Next, self.action)

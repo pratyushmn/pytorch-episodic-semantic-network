@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.distributions import Categorical
 import numpy as np
-from ...lib.utils import convertToProbability
+from ...lib.utils import convertToProbability, convertToProbabilityNew
 
 class AddOne(nn.Module):
     def __init__(self) -> None:
@@ -42,8 +44,11 @@ class NavigationLearner(nn.Module):
         # self.W1 = nn.Parameter(torch.Tensor(np.random.normal(0, 0.1, (100, units))))
 
         self.lr = lr
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
+        self.eps = 1
+        
+        self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         self.loss = nn.MSELoss()
+        # self.loss = nn.L1Loss()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Returns output of the neural network for a given input.
@@ -52,32 +57,28 @@ class NavigationLearner(nn.Module):
         # return torch.sigmoid(torch.matmul(x, self.W1) + 1)
         return self.evaluator(x)
 
-    def choose(self, state: np.ndarray, memoryGoal: np.ndarray, trialTime: int) -> int:
+    def choose(self, memoryGoal: np.ndarray, state: np.ndarray, trialTime: int) -> int:
         """Returns an action to choose based on CA1 state and current memory of goal.
         """
         hamming = np.zeros(8)
+        norms = np.zeros(8)
         actions = np.zeros(8)
 
         for i in range(8):
             actions.fill(0)
             actions[i] = 1
-            
+
             x = torch.Tensor(np.append(state, actions))
 
             output = self.forward(x).detach().numpy()
-
             hamming[i] = np.sum(np.absolute(memoryGoal - output))
+            norms[i] = 1/np.sum(np.absolute(memoryGoal - output))
 
-        # To prevent error in convertToProbability function when all values of the hamming array are equal, manually assign equal probabilities to all actions in that case.
-        # For some reason, all equal hamming array only happens when you switch to using MSE Loss + Adam optimizer steps, instead of manually updating weights.
-        # I tried using matrix multiplication with Pytorch instead of Numpy, and hamming array was never all equal until I switched to using an optimizer instead of manual weight updates.
-        if np.all(hamming == hamming[0]): 
-            print("All hamming are the same at trialtime {}".format(trialTime))
-            prob = np.ones(8)/8
+        else: probs = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
+        # else: probs, self.eps = convertToProbabilityNew(norms, self.eps, trialTime)
 
-        else: prob = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
-
-        return np.random.choice(np.arange(8), p=prob)
+        # return Categorical(torch.Tensor(probs)).sample()
+        return np.random.choice(np.arange(8), p=probs)
 
     def learn(self, state: np.ndarray, next_state: np.ndarray, action: int) -> None:
         """Updates neural network weights.
@@ -93,6 +94,7 @@ class NavigationLearner(nn.Module):
         state_prediction = self.forward(x)
 
         loss = self.loss(state_prediction, next_state)
+        # print("Loss: {}".format(loss.item()*980))
 
         loss.backward()
         self.optimizer.step()
