@@ -27,7 +27,7 @@ def trainAgent(agent, env, num_episodes):
 if __name__ == "__main__":
     envU = UnityEnvironment()
     env = UnityToGymWrapper(envU, allow_multiple_obs=False)
-    agent = Agent.StandardAgent()
+    agent = Agent.StandardAgent(contextDimension=(env.observation_space.shape[0] - 2), actionSpace=env.action_space.n)
     print("Action Space Size: {}".format(env.action_space.n))
     print("Observation Space Shape: {}".format(env.observation_space.shape))
 

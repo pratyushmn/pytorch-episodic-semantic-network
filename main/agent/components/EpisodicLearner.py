@@ -34,7 +34,7 @@ class AutoEncoder(nn.Module):
         return step2
 
 class EpisodicLearner(nn.Module):
-    def __init__(self, units: int, lr: float = 0.01, gamma: float = 0.95, place_field_breadth: float = 0.16) -> None:
+    def __init__(self, units: int, lr: float = 0.01, gamma: float = 0.95, place_field_breadth: float = 0.16, numContext: int = 0) -> None:
         """Initializes an episodic learner class.
         """
         super(EpisodicLearner, self).__init__()
@@ -42,14 +42,14 @@ class EpisodicLearner(nn.Module):
         self.CA3Units = units
         self.CA1Units = units
 
-        self.CA1Fields = [torch.empty(self.CA1Units).uniform_(0, 1), torch.empty(self.CA1Units).uniform_(0, 1)]
+        self.CA1Fields = [torch.empty(self.CA1Units).uniform_(0, 1) for i in range(numContext + 2)]
 
         # Stored activity patterns
         self.state_vals = [0, 0] # critic values for last state and current state
         self.TDdelta = 0
 
         # NN Layers
-        self.input_to_autoencoder = nn.Linear(2, self.CA3Units)
+        self.input_to_autoencoder = nn.Linear(numContext + 2, self.CA3Units)
         self.autoencoder = AutoEncoder(self.CA3Units)
         self.autoencoder_to_linear = nn.Linear(self.CA3Units, self.CA1Units)
         self.critic_layer = nn.Linear(self.CA1Units, 1)

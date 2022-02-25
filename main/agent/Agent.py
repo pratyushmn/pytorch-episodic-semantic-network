@@ -6,11 +6,11 @@ from .components import NavigationLearner
 from ..lib.utils import activatePolicy
 
 class StandardAgent():
-    def __init__(self, episodicUnits = 980):
+    def __init__(self, episodicUnits = 980, contextDimension=0, actionSpace=8):
         self.learners = []
-        self.learners.append(EpisodicLearner.EpisodicLearner(episodicUnits))
+        self.learners.append(EpisodicLearner.EpisodicLearner(episodicUnits, numContext=contextDimension))
         self.learners.append(SemanticLearner.SemanticLearner(episodicUnits))
-        self.navigation = NavigationLearner.NavigationLearner(episodicUnits)
+        self.navigation = NavigationLearner.NavigationLearner(episodicUnits, actionSpace=actionSpace)
 
         # Episodic, semantic, and overall
         self.goals = [np.zeros(episodicUnits), np.zeros(episodicUnits), 
