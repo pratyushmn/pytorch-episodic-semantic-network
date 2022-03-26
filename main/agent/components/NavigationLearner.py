@@ -73,7 +73,12 @@ class NavigationLearner(nn.Module):
             hamming[i] = np.sum(np.absolute(memoryGoal - output))
             norms[i] = 1/np.sum(np.absolute(memoryGoal - output))
 
+        if np.all(hamming == hamming[0]): 
+            print("All Hammings are equal.")
+            probs = np.array([1/self.actionSpace for i in range(self.actionSpace)])
         else: probs = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
+
+        # else: probs = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
         # else: probs, self.eps = convertToProbabilityNew(norms, self.eps, trialTime)
 
         # return Categorical(torch.Tensor(probs)).sample()
