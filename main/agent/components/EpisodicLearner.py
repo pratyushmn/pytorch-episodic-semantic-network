@@ -22,15 +22,11 @@ class AutoEncoder(nn.Module):
         self.CA3W = nn.Linear(units, units)
         self.subtractOne = SubtractOne()
 
-        # initialize weights in the same way done in the original code (although original code didn't have any bias at all)
-        torch.nn.init.normal_(self.CA3W.weight, mean=0.0, std=0.1)
-        torch.nn.init.constant_(self.CA3W.bias, 0.0)
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Returns output of the "autoencoder" for a given input. 1 is subtracted elementwise everytime before the sigmoid function is applied in the original code; not sure why.
         """
-        step1 = torch.sigmoid(self.subtractOne(self.CA3W(x)))
-        step2 = torch.sigmoid(self.subtractOne(self.CA3W(step1)))
+        step1 = torch.sigmoid(self.CA3W(x))
+        step2 = torch.sigmoid(self.CA3W(step1))
         return step2
 
 class EpisodicLearner(nn.Module):
@@ -53,16 +49,6 @@ class EpisodicLearner(nn.Module):
         self.autoencoder = AutoEncoder(self.CA3Units)
         self.autoencoder_to_linear = nn.Linear(self.CA3Units, self.CA1Units)
         self.critic_layer = nn.Linear(self.CA1Units, 1)
-
-        # initialize weights in the same way done in the original code (although original code didn't have any bias at all)
-        def init_weights(m):
-            if isinstance(m, nn.Linear):
-                torch.nn.init.normal_(m.weight, mean=0.0, std=0.1)
-                torch.nn.init.constant_(m.bias, 0)
-
-        self.input_to_autoencoder.apply(init_weights)
-        self.autoencoder_to_linear.apply(init_weights)
-        self.critic_layer.apply(init_weights)
 
         self.lr = lr
         self.gamma = gamma
@@ -127,7 +113,7 @@ class EpisodicLearner(nn.Module):
     def probeCA1(self, state: torch.Tensor) -> torch.Tensor:
         """Outputs the spatially cued CA1 based on input state.
         """
-        return (torch.exp(-((state[0] - self.CA1Fields[0])**2  + (state[1] - self.CA1Fields[1])**2) / (2 * (self.place_field_breadth**2))))
+        return (torch.exp(-(sum([(state[i] - self.CA1Fields[i])**2 for i in range(len(state))])) / (2 * (self.place_field_breadth**2))))
 
     def activateCritic(self, spatial_CA1: torch.Tensor) -> torch.Tensor:
         """Outputs the critic's valuation of the input spatially cued CA1.

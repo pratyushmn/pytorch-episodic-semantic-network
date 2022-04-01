@@ -25,16 +25,10 @@ def trainAgent(agent, env, num_episodes, save_path = None):
             action = agent.act(state, time)
             state, reward, done, info = env.step(action)
 
-            # done = reward > 0
-            # done from env step not working at all
-            # reward at first step after env epoch reset (when unity automatically does it) goes to negative total reward
-            # over last epoch (ie. delta of setting it back to 0)
-            # print("Prev State: {}, State: {}, Reward: {}, Done: {}, Info:{}, Action: {}".format(prevState, state, reward, done, info, action))
+            state = [(state[0] + 15)/30, (state[1] + 15)/30, state[2]]
 
-            # if reward > 0:
-            #     print("Reward > 0")
-            #     print(done)
-            #     t.sleep(5)
+            # done = reward > 0
+            # print("Prev State: {}, State: {}, Reward: {}, Done: {}, Info:{}, Action: {}".format(prevState, state, reward, done, info, action))
 
             agent.learn(state, reward, 0)
 

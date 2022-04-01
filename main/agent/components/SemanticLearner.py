@@ -15,9 +15,9 @@ class SemanticLearner(nn.Module):
         self.lr = lr
         self.k = k # for contrastive divergence
 
-        self.v = nn.Parameter(torch.zeros(1, self.num_visible))
-        self.h = nn.Parameter(torch.zeros(1, self.num_hidden))
-        self.W = nn.Parameter(torch.Tensor(np.random.normal(0, 0.01, (self.num_hidden, self.num_visible))))
+        self.v = nn.Parameter(torch.randn(1, self.num_visible))
+        self.h = nn.Parameter(torch.randn(1, self.num_hidden))
+        self.W = nn.Parameter(torch.randn(self.num_hidden, self.num_visible))
         
         self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
 

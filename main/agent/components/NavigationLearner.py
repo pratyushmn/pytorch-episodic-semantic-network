@@ -5,40 +5,20 @@ from torch.distributions import Categorical
 import numpy as np
 from ...lib.utils import convertToProbability, convertToProbabilityNew
 
-class AddOne(nn.Module):
-    def __init__(self) -> None:
-        """Initializes a nn module which adds 1 to all elements of input tensor. Not sure why this is needed, but this operation was done in the original code everytime before the sigmoid function was applied. 
-        """
-        super(AddOne, self).__init__()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Adds 1 to all elements in input tensor.
-        """
-        return x + 1
-
 class NavigationLearner(nn.Module):
-    def __init__(self, units: int, lr: float = 0.05, actionSpace: int = 8) -> None:
+    def __init__(self, units: int, lr: float = 0.01, actionSpace: int = 8) -> None:
         """Initializes a navigation learner class that predicts the next state of the environment given a combination of episodic + semantic memory outputs of the current state of the environment, for all possible actions.
         """
         super(NavigationLearner, self).__init__()
-
-        def init_weights(m):
-            if isinstance(m, nn.Linear):
-                torch.nn.init.normal_(m.weight, mean=0.0, std=0.1)
-                torch.nn.init.constant_(m.bias, 0)
 
         # In the original code, there's no bias in the linear layers. 
         # I decided to keep a bias but initialize it to zero. However, bias can be removed from th elinear layers by also adding a bias=False parameter to the nn.Linear constructor
         self.evaluator = nn.Sequential(
             nn.Linear(units + actionSpace, 100),
-            AddOne(),
             nn.Sigmoid(),
             nn.Linear(100, units),
-            AddOne(),
             nn.Sigmoid()
         )
-
-        self.evaluator.apply(init_weights)
 
         self.lr = lr
         self.eps = 1

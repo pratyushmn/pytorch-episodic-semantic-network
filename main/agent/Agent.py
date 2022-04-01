@@ -68,17 +68,16 @@ class StandardAgent():
             for i in range(100):
                 self.learners[0].backward(state)
 
-            if self.semantic:
-                randomState = state
-                for i in range(200):
-                    self.ca1Next = self.learners[0].forward(randomState)
-                    self.learners[1].backward(self.ca1Next)
-                    if self.priorKnowledge is True: 
-                        x = np.random.uniform(-15, 15)
-                        y = np.random.uniform(-15, 15)
-                        c = 1 if x <= 0 else 2
-                        randomState = np.array([x, y, c])
-                    else: randomState = np.array([np.random.uniform(-15, 15), np.random.uniform(-15, 15), 0])
+            randomState = state
+            for i in range(200):
+                self.ca1Next = self.learners[0].forward(randomState)
+                self.learners[1].backward(self.ca1Next)
+                if self.priorKnowledge is True: 
+                    x = np.random.uniform(-14, 14)
+                    y = np.random.uniform(-14, 14)
+                    c = 1 if x <= 0 else 2
+                    randomState = np.array([x, y, c])
+                else: randomState = np.array([np.random.uniform(-15, 15), np.random.uniform(-15, 15), 0])
         else:
             self.learners[0].temporalDifference(reward)
             self.learners[0].lr = self.learners[0].TDdelta.item() * 0.1
