@@ -58,7 +58,6 @@ class NavigationLearner(nn.Module):
             actions[i] = 1
 
             x = torch.cat((state, actions))
-            x.to(self.device)
 
             output = self.forward(x).detach()
             hamming[i] = torch.sum(torch.abs(memoryGoal - output))

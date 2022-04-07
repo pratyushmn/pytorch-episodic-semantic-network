@@ -66,6 +66,8 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--num", type=int, default=60, help="Number of episodes to run on the Unity Environment")
     parser.add_argument("-r", "--render", action='store_false', help="Toggle to not render the environment")
     parser.add_argument("-k", "--knowledge", action='store_false', help="Toggle to turn off prior knowledge")
+    parser.add_argument("-e", "--episodic", action='store_false', help="Toggle to turn off episodic decision making")
+    parser.add_argument("-s", "--semantic", action='store_false', help="Toggle to turn off semantic decision making")
     parser.add_argument("-f", "--file", type=str, default=None, help="Directory to save output to (only for test)")
     
     args = parser.parse_args()
@@ -74,7 +76,7 @@ if __name__ == "__main__":
 
     envU = UnityEnvironment(file_name=args.path, no_graphics=(not args.render))
     env = UnityToGymWrapper(envU, allow_multiple_obs=False)
-    agent = Agent.StandardAgent(contextDimension=(env.observation_space.shape[0] - 2), actionSpace=env.action_space.n, priorKnowledge=args.knowledge)
+    agent = Agent.StandardAgent(contextDimension=(env.observation_space.shape[0] - 2), actionSpace=env.action_space.n, priorKnowledge=args.knowledge, episodic=args.episodic, semantic=args.semantic)
     print("Action Space Size: {}".format(env.action_space.n))
     print("Observation Space Shape: {}".format(env.observation_space.shape))
 
