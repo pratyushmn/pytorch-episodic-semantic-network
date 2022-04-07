@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
@@ -7,10 +8,11 @@ def activatePolicy(policy, tau):
     return np.clip(policy * np.exp(-1 / tau) , 0, 1)
 
 def convertToProbability(x, NewMin, NewMax):
-    OldMin = np.amin(x)
-    OldMax = np.amax(x)
+    OldMin = torch.min(x)
+    OldMax = torch.max(x)
     new_x = (((x - OldMin) * (NewMax - NewMin)) / (OldMax - OldMin)) + NewMin
-    return new_x / np.sum(new_x)
+    probs = new_x / torch.sum(new_x)
+    return probs.cpu().numpy()
 
 def convertToProbabilityNew(x, alpha, trialTime):
     new_alpha = max(alpha - trialTime/4000, 0)
