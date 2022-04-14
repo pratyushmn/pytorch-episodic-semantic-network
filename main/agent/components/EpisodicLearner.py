@@ -18,6 +18,48 @@ class AutoEncoder(nn.Module):
         step2 = torch.sigmoid(self.CA3W(step1))
         return step2
 
+class Critic(nn.Module):
+    def __init__(self, units: int, gamma: float) -> None:
+        """Initializes a nn module "critic" which acts as a value function for the input state. 
+        """
+        super(Critic, self).__init__()
+
+        self.critic_layer = nn.Linear(units, 1)
+        self.gamma = gamma
+
+        self.last_val = None
+        self.curr_val = None
+        self.TDdelta = 0
+
+        self.optim = torch.optim.SGD(self.critic_layer.parameters(), lr=0.04)
+
+    def activateCritic(self, spatial_CA1: torch.Tensor) -> None:
+        """Saves the critic's valuation of the input spatially cued CA1.
+        """
+        self.last_val = self.curr_val
+        self.curr_val = torch.tanh(self.critic_layer(spatial_CA1)) 
+
+    def temporalDifference(self, reward: int) -> None:
+        """Computes critic prediction error based on the reward and past predictions, using temporal difference learning strategies.
+        """
+        if self.last_val is not None:
+            self.TDdelta = reward + self.gamma * self.curr_val - self.last_val
+
+    def updateCriticW(self) -> None:
+        """Updates weights for critic based on TD delta.
+        """
+        # can only do TD learning if at least 2 states have been experienced
+        if self.last_val is None: return
+
+        # update the learning rate based on the TD delta
+        for g in self.optim.param_groups: g['lr'] = 0.04*self.TDdelta.item()
+
+        # backprop
+        self.optim.zero_grad()
+        critic_loss = nn.functional.l1_loss(self.last_val, self.TDdelta + self.last_val)
+        critic_loss.backward(retain_graph=True)
+        self.optim.step()
+
 class EpisodicLearner(nn.Module):
     def __init__(self, device, units: int, lr: float = 0.01, gamma: float = 0.95, place_field_breadth: float = 0.16, numContext: int = 0) -> None:
         """Initializes an episodic learner class.
@@ -30,30 +72,25 @@ class EpisodicLearner(nn.Module):
 
         self.CA1Fields = [torch.empty(self.CA1Units, device=self.device).uniform_(0, 1) for i in range(numContext + 2)]
 
-        self.last_val = None
-        self.curr_val = None
-        self.TDdelta = 0
-
         # NN Layers
         self.input_to_autoencoder = nn.Linear(numContext + 2, self.CA3Units)
         self.autoencoder = AutoEncoder(self.CA3Units)
         self.autoencoder_to_linear = nn.Linear(self.CA3Units, self.CA1Units)
-        self.critic_layer = nn.Linear(self.CA1Units, 1)
-
+        self.critic = Critic(self.CA1Units, gamma)
+        
         self.input_to_autoencoder.to(self.device)
         self.autoencoder.to(device)
         self.autoencoder_to_linear.to(self.device)
-        self.critic_layer.to(self.device)
+        self.critic.to(self.device)
 
         self.lr = lr
-        self.gamma = gamma
+        
         self.place_field_breadth = place_field_breadth
 
         self.loss = nn.L1Loss()
 
         self.CA3_optimizer = torch.optim.SGD(chain(self.input_to_autoencoder.parameters(), self.autoencoder.parameters()), lr=self.lr, momentum=0.5)
         self.CA1_optimizer = torch.optim.SGD(self.autoencoder_to_linear.parameters(), lr=self.lr)
-        self.critic_optimizer = torch.optim.SGD(self.critic_layer.parameters(), lr=0.04)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         """Return CA1 output cued from CA3 for given state; also update critic-based state values using CA1 cued from spatial input
@@ -74,8 +111,7 @@ class EpisodicLearner(nn.Module):
         CA1_from_spatial = self.probeCA1(state)
 
         # Critic value for state based on CA1 cued from space
-        self.last_val = self.curr_val
-        self.curr_val = self.activateCritic(CA1_from_spatial)
+        self.critic.activateCritic(CA1_from_spatial)
 
     def backward(self, state: torch.Tensor) -> None:
         """Train the weights of all neural network layers (except the critic) based on the input state.
@@ -106,29 +142,3 @@ class EpisodicLearner(nn.Module):
         """Outputs the spatially cued CA1 based on input state.
         """
         return (torch.exp(-(sum([(state[i] - self.CA1Fields[i])**2 for i in range(len(state))])) / (2 * (self.place_field_breadth**2))))
-
-    def activateCritic(self, spatial_CA1: torch.Tensor) -> torch.Tensor:
-        """Outputs the critic's valuation of the input spatially cued CA1.
-        """
-        return torch.tanh(self.critic_layer(spatial_CA1)) 
-
-    def temporalDifference(self, reward: int) -> None:
-        """Computes critic prediction error based on the reward and past predictions, using temporal difference learning strategies.
-        """
-        if self.last_val is not None:
-            self.TDdelta = reward + self.gamma * self.curr_val - self.last_val
-
-    def updateCriticW(self) -> None:
-        """Updates weights for critic based on TD delta.
-        """
-        # can only do TD learning if at least 2 states have been experienced
-        if self.last_val is None: return
-
-        # update the learning rate based on the TD delta
-        for g in self.critic_optimizer.param_groups: g['lr'] = 0.04*self.TDdelta.item()
-
-        # backprop
-        self.critic_optimizer.zero_grad()
-        critic_loss = nn.functional.l1_loss(self.last_val, self.TDdelta + self.last_val)
-        critic_loss.backward(retain_graph=True)
-        self.critic_optimizer.step()

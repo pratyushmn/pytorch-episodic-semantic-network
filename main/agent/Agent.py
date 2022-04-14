@@ -6,7 +6,7 @@ from .components import NavigationLearner
 from ..lib.utils import activatePolicy
 
 class Agent():
-    def __init__(self, episodicUnits: int = 980, contextDimension: int = 0, actionSpace: int = 8, episodic: bool = True, semantic: bool = True, priorKnowledge: bool = True):
+    def __init__(self, episodicUnits: int = 980, contextDimension: int = 0, actionSpace: int = 8, episodic: bool = True, semantic: bool = True, priorKnowledge: bool = True) -> None:
         """Initializes an agent class that can learn to correctly choose actions given an input state, using a combination of 
         episodic and semantic memory.
         """
@@ -33,7 +33,7 @@ class Agent():
         # last action
         self.action = 0
 
-    def act(self, state: np.ndarray, trialTime: int):
+    def act(self, state: np.ndarray, trialTime: int) -> int:
         """Returns an action to choose based on input state and current number of steps taken.
         """
         state = torch.Tensor(state).to(self.device)
@@ -61,14 +61,14 @@ class Agent():
 
         return self.action
 
-    def learn(self, state: np.ndarray, reward: float):
+    def learn(self, state: np.ndarray, reward: float) -> None:
         """Updates weights of component networks.
         """
         state = torch.Tensor(state).to(self.device)
         self.ca1Next = self.probeCA1(state)
         if reward > 0:
-            self.learners[0].temporalDifference(reward)
-            self.learners[0].updateCriticW()
+            self.learners[0].critic.temporalDifference(reward)
+            self.learners[0].critic.updateCriticW()
             self.learners[0].lr = 0.1
             for i in range(50):
                 self.learners[0].backward(state)
@@ -86,19 +86,19 @@ class Agent():
 
                 randomState = torch.Tensor([(randomState[0] + 15)/30, (randomState[1] + 15)/30, randomState[2]/2]).to(self.device)
         else:
-            self.learners[0].temporalDifference(reward)
-            self.learners[0].lr = self.learners[0].curr_val.item() * 0.1
-            self.learners[0].updateCriticW()
+            self.learners[0].critic.temporalDifference(reward)
+            self.learners[0].critic.updateCriticW()
+            self.learners[0].lr = self.learners[0].critic.curr_val.item() * 0.1
             self.learners[0].backward(self.currState)
 
             self.navigation.learn(self.ca1Now, self.ca1Next, self.action)
 
-    def probeCA1(self, state: torch.Tensor):
+    def probeCA1(self, state: torch.Tensor) -> torch.Tensor:
         """Returns place cell representation of current state.
         """
         return self.learners[0].probeCA1(state)
 
-    def decayPolicy(self):
+    def decayPolicy(self) -> None:
         """Updates the balance between episodic and semantic memory goal every step.
         """
         self.policyN = activatePolicy(self.policyN, self.tau)
