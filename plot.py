@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 # file_path = 'runs/PK/Consolidation/'
 
-# for i in range (1, 3):
+# for i in range (1, 2):
 #     cumulative_reward = np.load(file_path + '{}/cumulative_reward.npy'.format(i))
 
 #     plt.title('Cumulative Reward')

@@ -7,7 +7,7 @@ import time as t
 import argparse
 import os
 
-def trainAgent(agent, env, num_episodes, save_path = None):   
+def trainAgent(agent, env, num_episodes, knowledge, save_path = None):   
     reward_rate = []
     reward_rate_per_episode = []
     cumulative_reward = []
@@ -29,11 +29,12 @@ def trainAgent(agent, env, num_episodes, save_path = None):
             action = agent.act(state, time)
             state, reward, done, info = env.step(action)
 
-            state = np.array([(state[0] + 15)/30, (state[1] + 15)/30, state[2]/2])
+            if knowledge: state = np.array([(state[0] + 15)/30, (state[1] + 15)/30, state[2]/2])
+            else: state = np.array([(state[0] + 15)/30, (state[1] + 15)/30, 0])
 
             # print("Prev State: {}, State: {}, Reward: {}, Done: {}, Info:{}, Action: {}".format(prevState, state, reward, done, info, action))
 
-            agent.learn(state, reward, 0)
+            agent.learn(state, reward)
 
             time += 1
             steps += 1
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--knowledge", action='store_false', help="Toggle to turn off prior knowledge")
     parser.add_argument("-e", "--episodic", action='store_false', help="Toggle to turn off episodic decision making")
     parser.add_argument("-s", "--semantic", action='store_false', help="Toggle to turn off semantic decision making")
-    parser.add_argument("-f", "--file", type=str, default=None, help="Directory to save output to (only for test)")
+    parser.add_argument("-f", "--file", type=str, default=None, help="Directory to save output to")
     
     args = parser.parse_args()
 
@@ -80,4 +81,4 @@ if __name__ == "__main__":
     print("Action Space Size: {}".format(env.action_space.n))
     print("Observation Space Shape: {}".format(env.observation_space.shape))
 
-    trainAgent(agent, env, args.num, args.file)
+    trainAgent(agent, env, args.num, args.knowledge, save_path=args.file)

@@ -1,20 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Categorical
 import numpy as np
-from ...lib.utils import convertToProbability, convertToProbabilityNew
+from ...lib.utils import convertToProbability
 
 class NavigationLearner(nn.Module):
     def __init__(self, device, units: int, lr: float = 0.0075, actionSpace: int = 8) -> None:
         """Initializes a navigation learner class that predicts the next state of the environment given a combination of episodic + semantic memory outputs of the current state of the environment, for all possible actions.
         """
         super(NavigationLearner, self).__init__()
-
-        def init_weights(m):
-            if isinstance(m, nn.Linear):
-                torch.nn.init.normal_(m.weight, mean=0.0, std=0.1)
-                torch.nn.init.normal_(m.bias, mean=0.0, std=0.1)
 
         self.device = device
 
@@ -28,22 +22,17 @@ class NavigationLearner(nn.Module):
 
         self.evaluator.to(self.device)
 
-        # self.evaluator.apply(init_weights)
-
         self.lr = lr
         self.eps = 1
         
         self.optimizer = torch.optim.SGD(self.parameters(), lr=self.lr)
         self.loss = nn.MSELoss()
-        # self.loss = nn.L1Loss()
 
         self.actionSpace = actionSpace
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Returns output of the neural network for a given input.
         """
-        # x = torch.sigmoid(torch.matmul(x, self.W0) + 1)
-        # return torch.sigmoid(torch.matmul(x, self.W1) + 1)
         return self.evaluator(x)
 
     def choose(self, memoryGoal: np.ndarray, state: np.ndarray, trialTime: int) -> int:
@@ -68,10 +57,6 @@ class NavigationLearner(nn.Module):
             probs = np.array([1/self.actionSpace for i in range(self.actionSpace)])
         else: probs = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
 
-        # else: probs = convertToProbability(1 - hamming, np.clip(trialTime/2000, 0, 0.99), 1)
-        # else: probs, self.eps = convertToProbabilityNew(norms, self.eps, trialTime)
-
-        # return Categorical(torch.Tensor(probs)).sample()
         return np.random.choice(np.arange(self.actionSpace), p=probs)
 
     def learn(self, state: torch.Tensor, next_state: torch.Tensor, action: int) -> None:
@@ -87,7 +72,6 @@ class NavigationLearner(nn.Module):
         state_prediction = self.forward(x)
 
         loss = self.loss(state_prediction, next_state)
-        # print("Loss: {}".format(loss.item()*980))
 
         loss.backward()
         self.optimizer.step()

@@ -22,7 +22,8 @@ def train(trialMax = 5000, delay = 4000, policy = 1):
         print('Finding reward # ', rewardsFound + 1, end='\r')
         action = agent.act(state, env.trialTime)
         state, reward = env.step(action)
-        agent.learn(state, reward, env.delay)
+        # agent.learn(state, reward, env.delay)
+        agent.learn(state, reward)
         
         if reward == 1:
             rewardsFound += 1

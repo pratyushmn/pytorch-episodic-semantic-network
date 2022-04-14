@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
+from itertools import chain
 
 class AutoEncoder(nn.Module):
     def __init__(self, units: int) -> None:
@@ -9,9 +10,6 @@ class AutoEncoder(nn.Module):
         super(AutoEncoder, self).__init__()
 
         self.CA3W = nn.Linear(units, units)
-
-        # torch.nn.init.normal_(self.CA3W.weight, mean=0.0, std=0.1)
-        # torch.nn.init.normal_(self.CA3W.bias, mean=0.0, std=0.1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Returns output of the "autoencoder" for a given input. 1 is subtracted elementwise everytime before the sigmoid function is applied in the original code; not sure why.
@@ -26,19 +24,12 @@ class EpisodicLearner(nn.Module):
         """
         super(EpisodicLearner, self).__init__()
 
-        def init_weights(m):
-            if isinstance(m, nn.Linear):
-                torch.nn.init.normal_(m.weight, mean=0.0, std=0.1)
-                torch.nn.init.normal_(m.bias, mean=0.0, std=0.1)
-
         self.CA3Units = units
         self.CA1Units = units
         self.device = device
 
         self.CA1Fields = [torch.empty(self.CA1Units, device=self.device).uniform_(0, 1) for i in range(numContext + 2)]
 
-        # Stored activity patterns
-        # self.state_vals = [0, 0] # critic values for last state and current state
         self.last_val = None
         self.curr_val = None
         self.TDdelta = 0
@@ -48,12 +39,6 @@ class EpisodicLearner(nn.Module):
         self.autoencoder = AutoEncoder(self.CA3Units)
         self.autoencoder_to_linear = nn.Linear(self.CA3Units, self.CA1Units)
         self.critic_layer = nn.Linear(self.CA1Units, 1)
-
-        # self.input_to_autoencoder.apply(init_weights)
-        # self.autoencoder_to_linear.apply(init_weights)
-        
-        # torch.nn.init.zeros_(self.critic_layer.weight)
-        # torch.nn.init.zeros_(self.critic_layer.bias)
 
         self.input_to_autoencoder.to(self.device)
         self.autoencoder.to(device)
@@ -65,9 +50,8 @@ class EpisodicLearner(nn.Module):
         self.place_field_breadth = place_field_breadth
 
         self.loss = nn.L1Loss()
-        # self.loss = nn.MSELoss()
 
-        self.CA3_optimizer = torch.optim.SGD(self.autoencoder.parameters(), lr=self.lr, momentum=0.5)
+        self.CA3_optimizer = torch.optim.SGD(chain(self.input_to_autoencoder.parameters(), self.autoencoder.parameters()), lr=self.lr, momentum=0.5)
         self.CA1_optimizer = torch.optim.SGD(self.autoencoder_to_linear.parameters(), lr=self.lr)
         self.critic_optimizer = torch.optim.SGD(self.critic_layer.parameters(), lr=0.04)
 
@@ -83,7 +67,7 @@ class EpisodicLearner(nn.Module):
         
         return CA1_from_CA3.detach()
 
-    def predict_state_val(self, state: np.ndarray) -> None:
+    def predict_state_val(self, state: torch.Tensor) -> None:
         """Compute the critic prediction of state value and save it.
         """
         # CA1 cued from space
@@ -126,14 +110,11 @@ class EpisodicLearner(nn.Module):
     def activateCritic(self, spatial_CA1: torch.Tensor) -> torch.Tensor:
         """Outputs the critic's valuation of the input spatially cued CA1.
         """
-        # tanh wasn't originally there in paper 
-        # but I added it since it makes sense to have it here (prevent exploding predictions)
         return torch.tanh(self.critic_layer(spatial_CA1)) 
 
     def temporalDifference(self, reward: int) -> None:
         """Computes critic prediction error based on the reward and past predictions, using temporal difference learning strategies.
         """
-        # self.TDdelta = reward + self.gamma * self.state_vals[1] - self.state_vals[0]
         if self.last_val is not None:
             self.TDdelta = reward + self.gamma * self.curr_val - self.last_val
 
@@ -141,7 +122,6 @@ class EpisodicLearner(nn.Module):
         """Updates weights for critic based on TD delta.
         """
         # can only do TD learning if at least 2 states have been experienced
-        # if isinstance(self.state_vals[0], int): return 
         if self.last_val is None: return
 
         # update the learning rate based on the TD delta
@@ -151,6 +131,4 @@ class EpisodicLearner(nn.Module):
         self.critic_optimizer.zero_grad()
         critic_loss = nn.functional.l1_loss(self.last_val, self.TDdelta + self.last_val)
         critic_loss.backward(retain_graph=True)
-        # critic_loss = -1* self.state_vals[0]
-        # critic_loss.backward()
         self.critic_optimizer.step()

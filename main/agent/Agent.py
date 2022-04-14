@@ -6,9 +6,10 @@ from .components import NavigationLearner
 from ..lib.utils import activatePolicy
 
 class StandardAgent():
-    def __init__(self, episodicUnits = 980, contextDimension=0, actionSpace=8, episodic=True, semantic=True, priorKnowledge=True):
+    def __init__(self, episodicUnits: int = 980, contextDimension: int = 0, actionSpace: int = 8, episodic: bool = True, semantic: bool = True, priorKnowledge: bool = True):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print("Device: {}".format(self.device))
+        
         self.learners = []
         self.learners.append(EpisodicLearner.EpisodicLearner(self.device, episodicUnits, numContext=contextDimension))
         self.learners.append(SemanticLearner.SemanticLearner(self.device, episodicUnits))
@@ -29,7 +30,7 @@ class StandardAgent():
         # last action
         self.action = 0
 
-    def act(self, state, trialTime):
+    def act(self, state: np.ndarray, trialTime: int):
         # Episodic goal
         state = torch.Tensor(state).to(self.device)
         self.ca1Now = self.probeCA1(state)
@@ -56,7 +57,7 @@ class StandardAgent():
 
         return self.action
 
-    def learn(self, state, reward, delay):
+    def learn(self, state: np.ndarray, reward: float):
         # We need to take a step in the environment
         # before we learn so that the navigation net has
         # access to the next state given the action taken
@@ -89,11 +90,7 @@ class StandardAgent():
 
             self.navigation.learn(self.ca1Now, self.ca1Next, self.action)
 
-        # Decay policy
-        for i in range(delay):
-            self.decayPolicy()
-
-    def probeCA1(self, state):
+    def probeCA1(self, state: torch.Tensor):
         return self.learners[0].probeCA1(state)
 
     def decayPolicy(self):
