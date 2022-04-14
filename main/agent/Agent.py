@@ -21,8 +21,7 @@ class Agent():
         self.priorKnowledge = priorKnowledge
 
         # Episodic, semantic, and overall
-        self.goals = [np.zeros(episodicUnits), np.zeros(episodicUnits), 
-                np.zeros(episodicUnits)]
+        self.goals = [np.zeros(episodicUnits), np.zeros(episodicUnits), np.zeros(episodicUnits)]
 
         # Policy to switch between episodic and semantic network
         self.tau = 2000
@@ -42,7 +41,6 @@ class Agent():
 
         self.goals[0] = self.learners[0].forward(state)
         self.learners[0].predict_state_val(state)
-        
         self.goals[1] = self.learners[1].forward(self.ca1Now)
 
         # Overall goal
@@ -67,31 +65,29 @@ class Agent():
         state = torch.Tensor(state).to(self.device)
         self.ca1Next = self.probeCA1(state)
         if reward > 0:
+            self.navigation.learn(self.ca1Now, self.ca1Next, self.action)
             self.learners[0].critic.temporalDifference(reward)
             self.learners[0].critic.updateCriticW()
             self.learners[0].lr = 0.1
-            for i in range(50):
-                self.learners[0].backward(state)
+
+            for i in range(50): self.learners[0].backward(state)
 
             randomState = state
             for i in range(200):
                 self.ca1Next = self.learners[0].forward(randomState)
                 self.learners[1].backward(self.ca1Next)
                 if self.priorKnowledge is True: 
-                    x = np.random.uniform(-15, 15)
-                    y = np.random.uniform(-15, 15)
+                    x, y = np.random.uniform(-15, 15), np.random.uniform(-15, 15)
                     c = 1 if x <= 0 else 2
                     randomState = [x, y, c]
                 else: randomState = [np.random.uniform(-15, 15), np.random.uniform(-15, 15), 0]
-
                 randomState = torch.Tensor([(randomState[0] + 15)/30, (randomState[1] + 15)/30, randomState[2]/2]).to(self.device)
         else:
+            self.navigation.learn(self.ca1Now, self.ca1Next, self.action)
             self.learners[0].critic.temporalDifference(reward)
             self.learners[0].critic.updateCriticW()
             self.learners[0].lr = self.learners[0].critic.curr_val.item() * 0.1
             self.learners[0].backward(self.currState)
-
-            self.navigation.learn(self.ca1Now, self.ca1Next, self.action)
 
     def probeCA1(self, state: torch.Tensor) -> torch.Tensor:
         """Returns place cell representation of current state.

@@ -139,6 +139,6 @@ class EpisodicLearner(nn.Module):
         self.CA1_optimizer.step()
 
     def probeCA1(self, state: torch.Tensor) -> torch.Tensor:
-        """Outputs the spatially cued CA1 based on input state.
+        """Outputs the spatially cued CA1 (place cells) based on input state.
         """
         return (torch.exp(-(sum([(state[i] - self.CA1Fields[i])**2 for i in range(len(state))])) / (2 * (self.place_field_breadth**2))))
