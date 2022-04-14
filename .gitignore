@@ -12,6 +12,3 @@ data/
 
 # Ignore runs directory
 runs/
-
-# Ignore training script
-training_script.py
