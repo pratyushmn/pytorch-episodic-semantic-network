@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     envU = UnityEnvironment(file_name=args.path, no_graphics=(not args.render))
     env = UnityToGymWrapper(envU, allow_multiple_obs=False)
-    agent = Agent.StandardAgent(contextDimension=(env.observation_space.shape[0] - 2), actionSpace=env.action_space.n, priorKnowledge=args.knowledge, episodic=args.episodic, semantic=args.semantic)
+    agent = Agent.Agent(contextDimension=(env.observation_space.shape[0] - 2), actionSpace=env.action_space.n, priorKnowledge=args.knowledge, episodic=args.episodic, semantic=args.semantic)
     print("Action Space Size: {}".format(env.action_space.n))
     print("Observation Space Shape: {}".format(env.observation_space.shape))
 
