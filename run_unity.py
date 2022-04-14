@@ -29,8 +29,7 @@ def trainAgent(agent, env, num_episodes, knowledge, save_path = None):
             action = agent.act(state, time)
             state, reward, done, info = env.step(action)
 
-            if knowledge: state = np.array([(state[0] + 15)/30, (state[1] + 15)/30, state[2]/2])
-            else: state = np.array([(state[0] + 15)/30, (state[1] + 15)/30, 0])
+            state = np.array([(state[0] + 15)/30, (state[1] + 15)/30, state[2]/2])
 
             # print("Prev State: {}, State: {}, Reward: {}, Done: {}, Info:{}, Action: {}".format(prevState, state, reward, done, info, action))
 
