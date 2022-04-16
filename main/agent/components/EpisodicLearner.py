@@ -45,7 +45,10 @@ class Critic(nn.Module):
         if self.last_val is not None:
             self.TDdelta = reward + self.gamma * self.curr_val - self.last_val
 
-    def updateCriticW(self) -> None:
+    def returnCurrentValue(self) -> float:
+        if self.curr_val is not None: return self.curr_val.item()
+
+    def updateCriticWeights(self) -> None:
         """Updates weights for critic based on TD delta.
         """
         # can only do TD learning if at least 2 states have been experienced
@@ -112,6 +115,26 @@ class EpisodicLearner(nn.Module):
 
         # Critic value for state based on CA1 cued from space
         self.critic.activateCritic(CA1_from_spatial)
+    
+    def returnCurrentStateVal(self) -> float:
+        """Wrapper function for critic network.
+        """
+        return self.critic.returnCurrentValue()
+
+    def temporalDifference(self, reward: int) -> None:
+        """Wrapper function for critic network.
+        """
+        self.critic.temporalDifference(reward)
+
+    def updateCriticWeights(self) -> None:
+        """Wrapper function for critic network.
+        """
+        self.critic.updateCriticWeights()
+
+    def updateLearningRate(self, new_lr: float):
+        """Setter function for the learning rate.
+        """
+        self.lr = new_lr
 
     def backward(self, state: torch.Tensor) -> None:
         """Train the weights of all neural network layers (except the critic) based on the input state.
